@@ -119,6 +119,37 @@ Consideraciones
 - Los móviles deben existir previamente en Bermann para aceptar la data enviada.
 - Mantener la frecuencia estipulada para evitar alertas de integridad en el proveedor.
 
+Arquitectura del Servidor Node.js
+---------------------------------
+
+```
+Servidor Integración Bermann
+├── package.json        # Dependencias: axios, dotenv, log4js, mysql, nodemon
+├── .env / .env.example # Credenciales Bermann + conexión MySQL Apollo
+├── src/
+│   ├── server.js       # Loop principal: consulta Ubicaciones_Bermann y publica en Bermann
+│   ├── bermannClient.js# Gestión de auth/token JWT y envío de payloads
+│   ├── db.js           # Pool MySQL (promisificado, logs de conexión, helpers) 
+│   └── logger.js       # log4js con salida a archivo + consola
+└── logs/               # Carpeta creada en Apollo para persistir logs rotativos
+```
+
+Flujo actual
+------------
+1. `server.js` carga configuración desde `.env`, inicia `logger` y `db`.
+2. Cada `POLL_INTERVAL_MS` ejecuta un ciclo que consulta `Ubicaciones_Bermann` (JOIN `Integraciones` activo=1) buscando registros con `estadoEnvio` NULL/6.
+3. Cada fila se transforma con `mapearRegistroAFormatoBermann`, completando el JSON pedido por el integrador.
+4. `bermannClient.sendPayload` asegura el token (cacheado 1h) y publica en `/api/data/insert`.
+5. El resultado se persiste con `marcarRegistro`: estado 1 en éxito, 6 en error (detalle JSON del response o del fallo).
+6. `db.js` centraliza el pool MySQL (charset utf8mb4, timezone Z) y expone `query/getConnection/closePool` con logs de diagnostic.
+
+Pendientes / próximos pasos
+---------------------------
+- Ajustar SELECT / mapper según columnas definitivas (ej. obtener IMEI real si no está en `Integraciones`).
+- Completar los campos restantes del payload (odómetro, hdop, etc.) cuando estén disponibles en `Ubicaciones_Bermann`.
+- Definir manejo de reintentos hacia Bermann (exponencial/backoff) si el API devuelve errores temporales.
+- Configurar PM2/systemd en Apollo con `cwd` correcto y cargar `.env` para ejecución persistente.
+
 Historial de Cambios
 --------------------
 | Fecha      | Versión | Autor          | Comentario                              |
