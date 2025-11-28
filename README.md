@@ -29,6 +29,10 @@ Endpoints
 - Headers: `Content-Type: application/json`
 - Body:
 
+> **Nota operativa:** Bermann solo habilitó credenciales productivas para LocalizaTech, por lo que las pruebas actuales (curl, loop de servidor, monitoreo) se ejecutan sobre el endpoint de producción hasta que el proveedor disponga accesos equivalentes en desarrollo.
+
+> **Respuesta auth real:** aunque la documentación menciona `token`, el endpoint entrega el JWT en `access_token`; el servicio ya maneja ambas variantes.
+
 ```
 {
 	"id_cliente_externo": 0,

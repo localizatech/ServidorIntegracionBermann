@@ -4,12 +4,14 @@ const logger = require("./logger");
 const AUTH_ENDPOINT = `/api/auth`;
 const DATA_ENDPOINT = `/api/data/insert`;
 
-let cachedToken = null;
-let tokenExpiresAt = 0;
+let cachedTokenInfo = {
+  token: null,
+  expiresAt: 0,
+};
 
-async function authenticate() {
-  if (cachedToken && Date.now() < tokenExpiresAt) {
-    return cachedToken;
+async function authenticate({ force = false } = {}) {
+  if (!force && cachedTokenInfo.token && Date.now() < cachedTokenInfo.expiresAt) {
+    return cachedTokenInfo;
   }
 
   const payload = {
@@ -25,20 +27,32 @@ async function authenticate() {
     timeout: 5000,
   });
 
-  cachedToken = response.data?.token;
-  tokenExpiresAt = Date.now() + 60 * 60 * 1000 - 30000; // 1 hora - 30s margen
+  // Bermann expone el JWT en "access_token" aunque la documentación menciona "token".
+  const token = response.data?.token || response.data?.access_token;
+  const expiresAt = Date.now() + 60 * 60 * 1000 - 30000; // 1 hora - 30s margen
 
-  if (!cachedToken) {
+  if (!token) {
     throw new Error("No se recibió token desde Bermann");
   }
 
-  logger.info("Token Bermann renovado");
-  return cachedToken;
+  cachedTokenInfo = {
+    token,
+    expiresAt,
+  };
+
+  logger.info(
+    `Token Bermann renovado (expira ${new Date(expiresAt).toISOString()})`
+  );
+  return cachedTokenInfo;
 }
 
 async function sendPayload(data) {
-  const token = await authenticate();
+  const { token } = await authenticate();
   const url = `${process.env.BERMANN_BASE_URL}${DATA_ENDPOINT}`;
+
+  logger.debug(
+    `Enviando payload Bermann imei=${data.imei} patente=${data.patente} fecha=${data.fecha}`
+  );
 
   const response = await axios.post(url, data, {
     headers: {
@@ -52,5 +66,7 @@ async function sendPayload(data) {
 }
 
 module.exports = {
+  authenticate,
+  getTokenInfo: () => cachedTokenInfo,
   sendPayload,
 };

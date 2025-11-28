@@ -176,7 +176,21 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function autenticacionInicial() {
+  try {
+    const { expiresAt } = await bermannClient.authenticate({ force: true });
+    logger.info(
+      `Autenticación inicial completa; token válido hasta ${new Date(
+        expiresAt
+      ).toISOString()}`
+    );
+  } catch (error) {
+    logger.error(`No se pudo obtener el token inicial: ${error.message}`);
+  }
+}
+
 (async function bootstrap() {
+  await autenticacionInicial();
   while (true) {
     await cicloPrincipal();
     await delay(POLL_INTERVAL_MS);
