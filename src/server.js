@@ -29,8 +29,9 @@ const SELECT_REGISTROS_PENDIENTES = `
   JOIN Integraciones b ON a.idDispositivo = b.idDispositivo
   WHERE (a.estadoEnvio IS NULL OR a.estadoEnvio = 6)
     AND b.activo = 1
-  ORDER BY a.fechaHoraGps ASC
-  LIMIT 50
+    AND b.origen = 'Bermann'
+  ORDER BY a.fechaHoraGps DESC
+  LIMIT 10
 `;
 
 async function consultarRegistrosPendientes() {
@@ -39,7 +40,7 @@ async function consultarRegistrosPendientes() {
 
 async function marcarRegistro(idUbicacion, estado, detalle = null) {
   const sql =
-    "UPDATE Ubicaciones_Bermann SET fechaEnvio = NOW(), estadoEnvio = ?, detalleEnvio = ? WHERE idUbicacion = ?";
+    "UPDATE Ubicaciones_Bermann SET fechaDeEnvio = NOW(), estadoEnvio = ?, detalleEjecucion = ? WHERE idUbicacion = ?";
   return ejecutarQueryConReintentos(sql, [estado, detalle, idUbicacion]);
 }
 
@@ -91,11 +92,18 @@ function mapearRegistroAFormatoBermann(row) {
     num_sat: row.numSat || 0,
     estado: row.estado || 0,
     ibutton: row.ibutton || "",
-    temp_1: row.temp1 ?? 0,
-    temp_2: row.temp2 ?? 0,
-    temp_3: row.temp3 ?? 0,
+    temp_1: normalizarTemperatura(row.temp1),
+    temp_2: normalizarTemperatura(row.temp2),
+    temp_3: normalizarTemperatura(row.temp3),
     evento: construirEvento(row),
   };
+}
+
+function normalizarTemperatura(valor) {
+  if (valor === null || valor === undefined || Number(valor) === 999) {
+    return 0;
+  }
+  return Number(valor);
 }
 
 function construirEvento(row) {
@@ -149,13 +157,19 @@ async function cicloPrincipal() {
     }
 
     for (const registro of registros) {
+      const payload = mapearRegistroAFormatoBermann(registro);
       try {
-        const payload = mapearRegistroAFormatoBermann(registro);
+        logger.info(
+          `Vista previa Bermann idUbicacion=${registro.idUbicacion}: ${JSON.stringify(
+            payload
+          )}`
+        );
         const respuesta = await bermannClient.sendPayload(payload);
         await marcarRegistro(registro.idUbicacion, 1, JSON.stringify(respuesta));
         logger.info(
           `Registro ${registro.idUbicacion} enviado correctamente (patente ${registro.patente})`
         );
+        await delay(1000); // evitar rafagas contra el endpoint
       } catch (error) {
         logger.error(
           `Error enviando registro ${registro.idUbicacion}: ${error.message}`
@@ -165,6 +179,7 @@ async function cicloPrincipal() {
           6,
           JSON.stringify(error.response?.data || error.message)
         );
+        await delay(1000); // respetar espaciamiento incluso en error
       }
     }
   } catch (error) {
