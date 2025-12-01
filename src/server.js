@@ -136,14 +136,24 @@ function describirEvento(descripcion, codigo) {
 }
 
 function formatearFecha(fecha) {
-  if (!fecha) {
-    return new Date().toISOString().replace("T", " ").substring(0, 19);
-  }
-  const d = fecha instanceof Date ? fecha : new Date(fecha);
+  const buildDate = (valor) => {
+    if (valor instanceof Date) {
+      return new Date(valor.getTime());
+    }
+    if (typeof valor === "string") {
+      const isoLike = valor.includes("T") ? valor : valor.replace(" ", "T");
+      return new Date(isoLike.endsWith("Z") ? isoLike : `${isoLike}Z`);
+    }
+    return new Date(valor || Date.now());
+  };
+
+  const d = buildDate(fecha);
   const pad = (v) => String(v).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
-    d.getHours()
-  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(
+    d.getUTCDate()
+  )} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(
+    d.getUTCSeconds()
+  )}`;
 }
 
 async function cicloPrincipal() {
